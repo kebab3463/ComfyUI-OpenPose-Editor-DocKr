@@ -1,10 +1,10 @@
 [project]
 name = "comfyui-openpose-editor-dockr"
 description = "An enhanced OpenPose Editor for ComfyUI with pose auto-completion, pause/edit workflow support, and UI fixes."
-version = "1.0.0"
+version = "1.0.1"
 license = { text = "MIT" }
 dependencies = [
-    "numpy<2",
+    "numpy",
     "opencv-python==4.10.0.84",
     "Pillow"
 ]
