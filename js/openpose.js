@@ -74,7 +74,7 @@ class OpenPosePanel {
     flipped = false;
     lockMode = false;
     
-    // 用于缓存上次的pose数据，避免重复更新
+    // Caches the last pose data to avoid duplicate updates
     lastPoseData = null;
 
     deleteSelectedPoints() {
@@ -243,18 +243,18 @@ class OpenPosePanel {
         }
     }
 
-    // 修改：从poses_datas属性加载pose数据（不再从输入连接获取）
+    // Change: load pose data from the poses_datas property (no longer from the input connection)
     async loadFromPoseKeypoint() {
         try {
-            // 1. 从节点的poses_datas属性获取数据
+            // 1. Get data from the node's poses_datas property
             let poseData = this.node.properties?.poses_datas;
             
             if (!poseData || poseData.trim() === "") {
-                alert("未检测到有效的poses_datas数据，请先确保该属性有值！");
+                alert("No valid poses_datas found. Please make sure this property has a value!");
                 return;
             }
 
-            // 2. 数据格式标准化（处理字符串/对象两种格式）
+            // 2. Normalize the data format (handles both string and object formats)
             let poseJson = null;
             if (typeof poseData === "string") {
                 poseJson = JSON.parse(poseData);
@@ -263,21 +263,21 @@ class OpenPosePanel {
             }
 
             if (!poseJson) {
-                alert("poses_datas数据格式错误！");
+                alert("Invalid poses_datas format!");
                 return;
             }
 
-            // 3. 生成数据指纹，避免重复更新
+            // 3. Generate a data fingerprint to avoid duplicate updates
             const dataFingerprint = JSON.stringify(poseJson);
             if (this.lastPoseData === dataFingerprint) {
-                alert("pose数据未变化，无需更新！");
+                alert("Pose data has not changed; no update needed!");
                 return;
             }
             this.lastPoseData = dataFingerprint;
 
-            // 4. 解析pose数据并加载到画布
+            // 4. Parse the pose data and load it onto the canvas
             
-            // 提取canvas尺寸
+            // Extract the canvas size
             let canvasWidth = 512;
             let canvasHeight = 512;
             if (Array.isArray(poseJson) && poseJson[0]) {
@@ -288,10 +288,10 @@ class OpenPosePanel {
                 canvasHeight = poseJson.height;
             }
 
-            // 调整画布尺寸
+            // Resize the canvas
             this.resizeCanvas(canvasWidth, canvasHeight);
 
-            // 提取people数据
+            // Extract the people data
             let people = [];
             if (Array.isArray(poseJson) && poseJson[0]?.people) {
                 people = poseJson[0].people;
@@ -304,11 +304,11 @@ class OpenPosePanel {
                 this.saveToNode();
                 this.syncDimensionsToNode();
             } else {
-                alert("poses_datas中未找到有效的人体关键点信息！");
+                alert("No valid body keypoint information found in poses_datas!");
             }
 
         } catch (error) {
-            alert(`加载pose数据失败：${error.message}`);
+            alert(`Failed to load pose data: ${error.message}`);
         }
     }
     
@@ -328,34 +328,34 @@ class OpenPosePanel {
         // 8:R-Hip, 9:R-Knee, 10:R-Ank, 11:L-Hip, 12:L-Knee, 13:L-Ank
         // 14:R-Eye, 15:L-Eye, 16:R-Ear, 17:L-Ear
 
-        // 对称关系对
+        // Symmetric pairs
         const symmetryPairs = [
-            [2, 5], [3, 6], [4, 7],   // 手臂
-            [8, 11], [9, 12], [10, 13], // 腿部
-            [14, 15], [16, 17]        // 面部
+            [2, 5], [3, 6], [4, 7],   // arms
+            [8, 11], [9, 12], [10, 13], // legs
+            [14, 15], [16, 17]        // face
         ];
 
-        // 父子关系（用于延伸推测）
+        // Parent-child relations (used for extrapolation)
         // [Child, Parent, ReferenceParent] -> Child = Parent + (Parent - ReferenceParent) * ratio
-        // 简单起见，我们假设 limb 长度大致相等
+        // For simplicity, we assume limb lengths are roughly equal
         const limbExtensions = [
-            [4, 3, 2], [7, 6, 5],   // 手腕
-            [10, 9, 8], [13, 12, 11] // 脚踝
+            [4, 3, 2], [7, 6, 5],   // wrists
+            [10, 9, 8], [13, 12, 11] // ankles
         ];
 
         Object.keys(poses).forEach(poseId => {
             const poseCircles = poses[poseId];
             const keypoints = new Array(18).fill(null);
 
-            // 1. 填充当前存在的点
+            // 1. Fill in the points that currently exist
             poseCircles.forEach(c => {
                 keypoints[c._id] = c;
             });
 
-            // 2. 尝试补全
-            // 我们需要创建一个辅助函数来添加新点
+            // 2. Try to complete
+            // We need to create a helper function to add new points
             const addMissingPoint = (id, x, y) => {
-                if (keypoints[id]) return; // 已存在
+                if (keypoints[id]) return; // already exists
 
                 const circle = new fabric.Circle({
                     left: x, top: y, radius: 5,
@@ -368,31 +368,31 @@ class OpenPosePanel {
                 });
                 
                 this.canvas.add(circle);
-                keypoints[id] = circle; // 更新记录
+                keypoints[id] = circle; // update the record
             };
 
-            // 策略 A: 对称补全
+            // Strategy A: symmetric completion
             const neck = keypoints[1];
             if (neck) {
                 symmetryPairs.forEach(pair => {
-                    const leftId = pair[1]; // 索引大的通常是左侧（在COCO定义中 5,6,7 是左）
+                    const leftId = pair[1]; // the larger index is usually the left side (in the COCO definition 5,6,7 are left)
                     const rightId = pair[0];
 
                     const L = keypoints[leftId];
                     const R = keypoints[rightId];
 
                     if (L && !R) {
-                        // 有左没右，补右
+                        // has left but not right: add right
                         addMissingPoint(rightId, neck.left + (neck.left - L.left), L.top);
                     } else if (!L && R) {
-                        // 有右没左，补左
+                        // has right but not left: add left
                         addMissingPoint(leftId, neck.left + (neck.left - R.left), R.top);
                     }
                 });
             }
 
-            // 策略 B: 骨骼延伸 (简单的向量加法)
-            // 如果手肘存在，肩膀存在，手腕缺失 -> 手腕 = 手肘 + (手肘-肩膀)
+            // Strategy B: limb extension (simple vector addition)
+            // If elbow and shoulder exist but wrist is missing -> wrist = elbow + (elbow - shoulder)
             limbExtensions.forEach(rule => {
                 const [target, p1, p2] = rule;
                 if (!keypoints[target] && keypoints[p1] && keypoints[p2]) {
@@ -405,7 +405,7 @@ class OpenPosePanel {
             });
         });
 
-        // 重新生成连线
+        // Regenerate the connecting lines
         const existingPolygons = this.canvas.getObjects('polygon');
         
         Object.keys(poses).forEach(poseIdStr => {
@@ -419,7 +419,7 @@ class OpenPosePanel {
                 const end = pointMap[pair[1]];
 
                 if (start && end) {
-                    // 检查线是否已存在
+                    // Check whether the line already exists
                     const hasLine = existingPolygons.some(l => 
                         l._poseId === poseId && 
                         ((l._startCircle === start && l._endCircle === end) || 
@@ -427,7 +427,7 @@ class OpenPosePanel {
                     );
 
                     if (!hasLine) {
-                        // 创建新的纺锤形多边形
+                        // Create a new spindle-shaped polygon
                         const points = this.getFusiformPoints(
                             { x: start.left, y: start.top },
                             { x: end.left, y: end.top }
@@ -454,7 +454,7 @@ class OpenPosePanel {
                             _poseId: poseId
                         });
                         this.canvas.add(polygon);
-                        this.canvas.sendToBack(polygon); // 确保线在点下面
+                        this.canvas.sendToBack(polygon); // make sure the line is below the points
                     }
                 }
             });
@@ -467,74 +467,74 @@ class OpenPosePanel {
         const pauseToolbar = this.pauseToolbar;
         if (!pauseToolbar) return;
         
-        pauseToolbar.innerHTML = ""; // 清空
-        pauseToolbar.style.display = "flex"; // 显示
+        pauseToolbar.innerHTML = ""; // clear
+        pauseToolbar.style.display = "flex"; // show
 
-        // 提示文本
+        // Status text
         const statusText = document.createElement("span");
-        statusText.innerText = "⚠️ 运行暂停中...";
+        statusText.innerText = "⚠️ Run paused...";
         statusText.style.cssText = "color: #ffcc00; font-weight: bold; font-size: 12px; margin-right: 15px;";
         pauseToolbar.appendChild(statusText);
 
-        // 继续按钮
+        // Continue button
         const btnContinue = document.createElement("button");
-        btnContinue.innerText = "继续运行";
-        btnContinue.title = "提交当前编辑并继续工作流";
+        btnContinue.innerText = "Continue";
+        btnContinue.title = "Submit the current edits and continue the workflow";
         btnContinue.style.cssText = "background: #228be6; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;";
         
         btnContinue.onclick = async () => {
             try {
-                btnContinue.innerText = "提交中...";
+                btnContinue.innerText = "Submitting...";
                 btnContinue.disabled = true;
                 
-                // 获取最新的姿态数据
+                // Get the latest pose data
                 const poseData = this.serializeJSON();
                 
-                // 发送给后端
+                // Send to the backend
                 await api.fetchApi("/openpose/update_pose", {
                     method: "POST",
                     body: JSON.stringify({ node_id: this.node.id, pose_data: poseData })
                 });
                 
-                // 隐藏控制区并重置状态
+                // Hide the control area and reset the state
                 pauseToolbar.style.display = "none";
                 this.node.is_paused = false;
                 
-                // 自动关闭编辑器窗口
+                // Automatically close the editor window
                 if (this.panel) {
                     this.panel.close();
                 }
             } catch (e) {
-                alert("提交失败: " + e.message);
-                btnContinue.innerText = "重试";
+                alert("Submit failed: " + e.message);
+                btnContinue.innerText = "Retry";
                 btnContinue.disabled = false;
             }
         };
 
-        // 停止按钮
+        // Stop button
         const btnCancel = document.createElement("button");
-        btnCancel.innerText = "终止";
-        btnCancel.title = "取消当前工作流";
+        btnCancel.innerText = "Stop";
+        btnCancel.title = "Cancel the current workflow";
         btnCancel.style.cssText = "background: #fa5252; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;";
 
         btnCancel.onclick = async () => {
-            if(!confirm("确定要终止当前工作流吗？")) return;
+            if(!confirm("Are you sure you want to stop the current workflow?")) return;
             
             try {
                 await api.fetchApi("/openpose/cancel", {
                     method: "POST",
                     body: JSON.stringify({ node_id: this.node.id })
                 });
-                // 隐藏控制区并重置状态
+                // Hide the control area and reset the state
                 pauseToolbar.style.display = "none";
                 this.node.is_paused = false;
                 
-                // 自动关闭编辑器窗口
+                // Automatically close the editor window
                 if (this.panel) {
                     this.panel.close();
                 }
             } catch (e) {
-                alert("取消失败: " + e.message);
+                alert("Cancel failed: " + e.message);
             }
         };
 
@@ -547,7 +547,7 @@ class OpenPosePanel {
         this.node = node;
         this.nextPoseId = 0;
         
-        // 存储初始状态，用于重置
+        // Store the initial state, used for reset
         this.initialPoseData = null;
         this.initialBackgroundImage = null;
 
@@ -562,25 +562,25 @@ class OpenPosePanel {
         `;
 
         const container = this.panel.addHTML(rootHtml, "openpose-container");
-        // 使用绝对定位布局，留出顶部 Header 和底部 Footer 的空间
-        // 增加底部预留空间给两行按钮 (50px -> 90px)
+        // Use absolute-positioning layout, leaving room for the top header and bottom footer
+        // Add extra bottom space for two rows of buttons (50px -> 90px)
         container.style.cssText = "position: absolute; top: 40px; bottom: 100px; left: 10px; right: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center;";
         
-        // 确保 footer 在底部且不遮挡内容
+        // Make sure the footer is at the bottom and does not cover the content
         this.panel.footer.style.position = "absolute";
         this.panel.footer.style.bottom = "0";
         this.panel.footer.style.left = "0";
         this.panel.footer.style.right = "0";
-        this.panel.footer.style.height = "90px"; // 增加高度
+        this.panel.footer.style.height = "90px"; // increase height
         this.panel.footer.style.padding = "5px 10px";
         this.panel.footer.style.boxSizing = "border-box";
         this.panel.footer.style.overflow = "hidden";
         this.panel.footer.style.display = "flex";
-        this.panel.footer.style.flexDirection = "column"; // 改为垂直排列
-        this.panel.footer.style.justifyContent = "flex-end"; // 底部对齐
+        this.panel.footer.style.flexDirection = "column"; // change to vertical layout
+        this.panel.footer.style.justifyContent = "flex-end"; // align to bottom
         this.panel.footer.style.gap = "5px";
 
-        // 创建两个工具栏容器
+        // Create two toolbar containers
         this.pauseToolbar = document.createElement("div");
         this.pauseToolbar.className = "pause-toolbar";
         this.pauseToolbar.style.cssText = "width: 100%; height: 40px; display: none; align-items: center; justify-content: center; gap: 10px; background: rgba(50, 50, 50, 0.5); border-radius: 4px;";
@@ -609,7 +609,7 @@ class OpenPosePanel {
         this.fileInput.style.display = "none";
         this.fileInput.addEventListener("change", this.onLoad.bind(this));
 
-        // 重新定义 addButton 方法，使其添加到 mainToolbar
+        // Redefine the addButton method so that it adds to mainToolbar
         this.panel.addButton = (name, callback) => {
             const btn = document.createElement("button");
             btn.innerText = name;
@@ -619,7 +619,7 @@ class OpenPosePanel {
             return btn;
         };
 
-        this.panel.addButton("新增", () => {
+        this.panel.addButton("Add", () => {
             const default_pose_keypoints_2d = [];
             DEFAULT_KEYPOINTS.forEach(pt => {
                 default_pose_keypoints_2d.push(pt[0], pt[1], 1.0);
@@ -630,15 +630,15 @@ class OpenPosePanel {
             this.syncDimensionsToNode();
         });
 
-        this.panel.addButton("删点", () => { this.deleteSelectedPoints(); this.saveToNode(); });
-        this.panel.addButton("清空", () => { this.removeFilteredPose(); this.saveToNode(); });
-        this.panel.addButton("重置", () => {
+        this.panel.addButton("Delete Point", () => { this.deleteSelectedPoints(); this.saveToNode(); });
+        this.panel.addButton("Clear", () => { this.removeFilteredPose(); this.saveToNode(); });
+        this.panel.addButton("Reset", () => {
             if (this.initialPoseData) {
                 this.loadJSON(this.initialPoseData);
                 
                 if (this.initialBackgroundImage) {
                     this.node.setProperty("backgroundImage", this.initialBackgroundImage);
-                    // 重新加载背景图
+                    // Reload the background image
                     const imageUrl = `/view?filename=${this.initialBackgroundImage}&type=input&t=${Date.now()}`;
                     fabric.Image.fromURL(imageUrl, (img) => {
                         if (!img || !img.width) return;
@@ -659,7 +659,7 @@ class OpenPosePanel {
                 this.saveToNode();
                 this.syncDimensionsToNode();
             } else {
-                // 如果没有初始状态，回退到原来的逻辑
+                // If there is no initial state, fall back to the original logic
                 this.resetCanvas();
                 this.node.setProperty("backgroundImage", "");
     
@@ -676,12 +676,12 @@ class OpenPosePanel {
             }
         });
         
-        this.panel.addButton("保存", () => {
+        this.panel.addButton("Save", () => {
             this.save();
             this.syncDimensionsToNode();
         });
-        this.panel.addButton("加载", () => this.load());
-        this.panel.addButton("全选", () => {
+        this.panel.addButton("Load", () => this.load());
+        this.panel.addButton("Select All", () => {
             const selectableCircles = this.canvas.getObjects('circle').filter(obj => obj.selectable);
 
             if (selectableCircles.length > 0) {
@@ -698,8 +698,8 @@ class OpenPosePanel {
             }
         });
         
-        // 新增补全按钮
-        this.panel.addButton("补全", () => {
+        // Add the Complete button
+        this.panel.addButton("Complete", () => {
             this.fixLimbs();
             this.saveToNode();
         });
@@ -707,14 +707,14 @@ class OpenPosePanel {
         this.bgFileInput = container.querySelector(".openpose-bg-file-input");
         this.bgFileInput.style.display = "none";
         this.bgFileInput.addEventListener("change", (e) => this.loadBackgroundImage(e));
-        this.panel.addButton("背景", () => this.bgFileInput.click());
+        this.panel.addButton("Background", () => this.bgFileInput.click());
 
         const setupDimensionInput = (label, value, callback) => {
             const lbl = document.createElement("label");
             lbl.innerHTML = label;
-            lbl.style.cssText = "font-family: Arial; padding: 0 0.5rem; color: #ccc; display: none;"; // 隐藏 label
+            lbl.style.cssText = "font-family: Arial; padding: 0 0.5rem; color: #ccc; display: none;"; // hide label
             const input = document.createElement("input");
-            input.style.cssText = "background: #1c1c1c; color: #aaa; width: 60px; border: 1px solid #444; display: none;"; // 隐藏 input
+            input.style.cssText = "background: #1c1c1c; color: #aaa; width: 60px; border: 1px solid #444; display: none;"; // hide input
             input.type = "number";
             input.min = "64";
             input.max = "4096";
@@ -759,7 +759,7 @@ class OpenPosePanel {
         });
 
         const lbl = document.createElement("label");
-        lbl.innerHTML = "人物";
+        lbl.innerHTML = "Person";
         lbl.style.cssText = "font-family: Arial; padding: 0 0.5rem; color: #ccc;";
 
         this.poseFilterInput = document.createElement("input");
@@ -780,7 +780,7 @@ class OpenPosePanel {
         this.mainToolbar.appendChild(this.poseFilterInput);
 
         setTimeout(() => {
-            // 检查是否处于暂停状态，如果是则显示控制按钮
+            // Check whether we are in the paused state; if so, show the control buttons
             if (this.node.is_paused) {
                 this.showPauseControls();
             }
@@ -793,7 +793,7 @@ class OpenPosePanel {
             
             const bgImageFilename = this.node.properties.backgroundImage;
             if (bgImageFilename) {
-                // 保存初始背景图设置
+                // Save the initial background image settings
                 this.initialBackgroundImage = bgImageFilename;
                 
                 const imageUrl = `/view?filename=${bgImageFilename}&type=input&t=${Date.now()}`;
@@ -813,7 +813,7 @@ class OpenPosePanel {
             }
             
             if (this.node.properties.poses_datas && this.node.properties.poses_datas.trim() !== "") {
-                // 保存初始姿态数据
+                // Save the initial pose data
                 this.initialPoseData = this.node.properties.poses_datas;
                 
                 const error = this.loadJSON(this.node.properties.poses_datas);
@@ -833,14 +833,14 @@ class OpenPosePanel {
                 this.setPose(defaultPeople);
                 this.syncDimensionsToNode();
                 
-                // 即使是默认姿态，也保存为初始状态
+                // Save as the initial state even for the default pose
                 this.initialPoseData = JSON.stringify({
                     width: this.canvasWidth,
                     height: this.canvasHeight,
                     people: defaultPeople
                 });
             }
-            // 移除自动检测定时器的启动代码
+            // Removed the code that started the auto-detect timer
         }, 0);
 
         const keyHandler = this.onKeyDown.bind(this);
@@ -848,15 +848,15 @@ class OpenPosePanel {
         this.panel.onClose = () => { 
             document.removeEventListener("keydown", keyHandler);
             this.syncDimensionsToNode();
-            // 移除定时器停止代码
+            // Removed the code that stopped the timer
         };
     }
 
-    // 移除自动检测相关的定时器方法
+    // Removed the auto-detect related timer methods
     setPanelStyle() {
         this.panel.style.transform = `translate(-50%,-50%)`;
         this.panel.style.margin = `0px 0px`;
-        // 再次强制确保层级最高
+        // Force the highest stacking level again
         this.panel.style.zIndex = "2147483647";
         this.panel.style.position = "fixed";
     }
@@ -878,23 +878,23 @@ class OpenPosePanel {
         const dx = end.x - start.x;
         const dy = end.y - start.y;
         let length = Math.sqrt(dx * dx + dy * dy);
-        if (length === 0) length = 1; // 避免除零
+        if (length === 0) length = 1; // avoid division by zero
 
-        // 中点
+        // Midpoint
         const midX = (start.x + end.x) / 2;
         const midY = (start.y + end.y) / 2;
 
-        // 法向量 (Normalized): (-dy, dx)
+        // Normal vector (normalized): (-dy, dx)
         const nx = -dy / length;
         const ny = dx / length;
 
-        // 设定纺锤体最大宽度
-        // 可以是固定的，也可以根据长度动态调整（例如长度的 15%，但不超过 14px）
+        // Set the maximum width of the spindle
+        // Can be fixed, or adjusted dynamically by length (e.g. 15% of the length, but not more than 14px)
         const maxWidth = 14; 
         // const calculatedWidth = Math.min(length * 0.15, maxWidth); 
         const halfWidth = maxWidth / 2;
 
-        // 生成四个顶点：起点 -> 侧边1 -> 终点 -> 侧边2
+        // Generate the four vertices: start -> side 1 -> end -> side 2
         return [
             { x: start.x, y: start.y },
             { x: midX + nx * halfWidth, y: midY + ny * halfWidth },
@@ -934,18 +934,18 @@ class OpenPosePanel {
             const endCircle = circles[pair[1]];
             if (!startCircle || !endCircle) return;
 
-            // 计算初始的纺锤形顶点
+            // Compute the initial spindle-shaped vertices
             const points = this.getFusiformPoints(
                 { x: startCircle.left, y: startCircle.top }, 
                 { x: endCircle.left, y: endCircle.top }
             );
 
-            // 使用 Polygon 替代 Line
+            // Use Polygon instead of Line
             const line = new fabric.Polygon(points, {
                 fill: `rgba(${connect_color[pair[0]] ? connect_color[pair[0]].join(", ") : '255,255,255'}, 0.7)`,
-                strokeWidth: 0, // 不需要描边，因为是用填充来表现形状
+                strokeWidth: 0, // no stroke needed, since the shape is drawn with fill
                 selectable: false,
-                evented: false,// 核心：锁定所有移动/旋转/缩放/倾斜
+                evented: false,// Core: lock all movement/rotation/scaling/skewing
 				lockMovementX: true,
 				lockMovementY: true,
 				lockRotation: true,
@@ -953,7 +953,7 @@ class OpenPosePanel {
 				lockScalingY: true,
 				lockSkewingX: true,
 				lockSkewingY: true,
-				// 额外：隐藏控制柄和边框（彻底杜绝误操作）
+				// Extra: hide the controls and border (completely prevents accidental operations)
 				hasControls: false,
 				hasBorders: false,
 				
@@ -972,8 +972,8 @@ class OpenPosePanel {
 
         return new Promise(resolve => {
             setTimeout(() => {
-                // 这里的 setTimeout 主要是为了确保渲染后更新一次坐标（如果有必要）
-                // 对于 Polygon，初始 points 已经正确，这里可以简化
+                // The setTimeout here is mainly to make sure coordinates are updated once after rendering (if necessary)
+                // For Polygon, the initial points are already correct, so this can be simplified
                 this.canvas.requestRenderAll();
                 resolve();
             }, 0);
@@ -994,7 +994,7 @@ class OpenPosePanel {
 
         await Promise.all(posePromises);
 		
-		// 新增：兜底校验 - 强制所有连线锁定
+		// New: fallback check - force all connecting lines to stay locked
 		this.canvas.getObjects('polygon').forEach(line => {
 			line.set({
 				selectable: false,
@@ -1046,40 +1046,40 @@ class OpenPosePanel {
             return;
         }
 
-        // 重新实现缩放逻辑：始终使用 CSS transform 来缩放，保持 Canvas 内部分辨率不变
+        // Reimplemented scaling logic: always scale via CSS transform, keeping the Canvas internal resolution unchanged
         const availableWidth = rectPanel.width;
         const availableHeight = rectPanel.height;
         
-        // 计算缩放比例，留出一点 padding
-        const padding = 20; // 增加一点 padding
+        // Compute the scale ratio, leaving a bit of padding
+        const padding = 20; // add a bit of padding
         const scaleX = (availableWidth - padding) / this.canvasWidth;
         const scaleY = (availableHeight - padding) / this.canvasHeight;
         
-        // 保持宽高比，移除 1.0 限制，允许无限放大以填满窗口
+        // Keep the aspect ratio; the 1.0 limit is removed, allowing unlimited enlargement to fill the window
         const scale = Math.min(scaleX, scaleY); 
 
-        // 获取 Fabric Wrapper 元素 (通常是 canvasElem 的父元素)
-        // 更加严谨的获取方式
+        // Get the Fabric wrapper element (usually the parent of canvasElem)
+        // A more rigorous way to get it
         const wrapperEl = this.canvas.wrapperEl || this.canvasElem.parentElement;
 
         if (wrapperEl) {
-            // 必须重置 wrapper 的尺寸，否则它会占据实际像素空间，导致 flex 居中失效或撑开容器
-            // 但 fabricjs 需要 wrapper 尺寸正确以处理事件...
-            // 技巧：wrapper 设为 absolute center，然后 transform
+            // The wrapper size must be reset, otherwise it takes up actual pixel space, breaking flex centering or stretching the container
+            // But fabricjs needs the wrapper to have the correct size to handle events...
+            // Trick: make the wrapper absolutely centered, then apply transform
             
             wrapperEl.style.position = "absolute";
             wrapperEl.style.left = "50%";
             wrapperEl.style.top = "50%";
             wrapperEl.style.width = `${this.canvasWidth}px`;
             wrapperEl.style.height = `${this.canvasHeight}px`;
-            // 使用 translate(-50%, -50%) 实现绝对居中，再叠加 scale
+            // Use translate(-50%, -50%) for absolute centering, then layer the scale on top
             wrapperEl.style.transform = `translate(-50%, -50%) scale(${scale})`;
-            wrapperEl.style.transformOrigin = "center center"; // 其实 translate 后 origin 无所谓了，但保持一致
+            wrapperEl.style.transformOrigin = "center center"; // the origin does not matter after translate, but keep it consistent
             
-            // 确保内部 canvas 也是 100% 填充 wrapper
+            // Make sure the inner canvas also fills 100% of the wrapper
             this.canvasElem.style.width = "100%";
             this.canvasElem.style.height = "100%";
-            // 上层 canvas (fabric 用于交互的层)
+            // Upper canvas (the layer fabric uses for interaction)
             if (this.canvas.upperCanvasEl) {
                 this.canvas.upperCanvasEl.style.width = "100%";
                 this.canvas.upperCanvasEl.style.height = "100%";
@@ -1117,12 +1117,12 @@ class OpenPosePanel {
             backgroundColor: '#000',
             preserveObjectStacking: true,
             selection: true,
-            fireRightClick: true,  // 允许右键触发事件
-            stopContextMenu: true  // 尝试阻止右键菜单
+            fireRightClick: true,  // allow right click to fire events
+            stopContextMenu: true  // try to block the context menu
         });
 
-        // 强制禁用右键菜单 (兼容性更好)
-        // 绑定到 wrapperEl 以覆盖整个 canvas 区域
+        // Force-disable the context menu (better compatibility)
+        // Bind to wrapperEl to cover the whole canvas area
         if (canvas.wrapperEl) {
             canvas.wrapperEl.addEventListener('contextmenu', function(e) {
                 e.preventDefault();
@@ -1130,20 +1130,20 @@ class OpenPosePanel {
             });
         }
 
-        // 添加鼠标滚轮缩放功能
+        // Add mouse wheel zoom
         canvas.on('mouse:wheel', function(opt) {
             var delta = opt.e.deltaY;
             var zoom = canvas.getZoom();
             zoom *= 0.999 ** delta;
             if (zoom > 20) zoom = 20;
-            if (zoom < 0.1) zoom = 0.1; // 最小缩放改为更小
+            if (zoom < 0.1) zoom = 0.1; // minimum zoom changed to be smaller
             
-            // 计算缩放中心点 (考虑 CSS 缩放)
-            // getBoundingClientRect 返回的是经过 CSS transform 后的实际渲染区域
+            // Compute the zoom center point (accounting for CSS scaling)
+            // getBoundingClientRect returns the actual rendered area after the CSS transform
             const rect = canvas.getElement().getBoundingClientRect();
             if (rect.width > 0 && rect.height > 0) {
-                // 计算鼠标相对于 Canvas 元素的比例位置
-                // 然后映射到 Canvas 内部的像素坐标
+                // Compute the mouse position ratio relative to the Canvas element
+                // then map it to pixel coordinates inside the Canvas
                 const x = (opt.e.clientX - rect.left) * (canvas.width / rect.width);
                 const y = (opt.e.clientY - rect.top) * (canvas.height / rect.height);
                 canvas.zoomToPoint({ x: x, y: y }, zoom);
@@ -1155,14 +1155,14 @@ class OpenPosePanel {
             opt.e.stopPropagation();
         });
 
-        // 添加鼠标拖拽画布功能 (按住 Alt 键或中键/右键)
+        // Add mouse drag-to-pan for the canvas (hold Alt, or middle/right button)
         let isDragging = false;
         let lastPosX, lastPosY;
         let wasSelectionEnabled = true;
 
         canvas.on('mouse:down', function(opt) {
             var evt = opt.e;
-            // 修改：移除右键拖动 (evt.button === 2)，仅保留 Alt+左键 或 中键 (evt.button === 1)
+            // Change: removed right-button drag (evt.button === 2); only Alt+left button or middle button (evt.button === 1) remain
             if (evt.altKey || evt.button === 1) { 
                 isDragging = true;
                 wasSelectionEnabled = canvas.selection;
@@ -1172,7 +1172,7 @@ class OpenPosePanel {
                 canvas.defaultCursor = 'grabbing';
                 canvas.setCursor('grabbing');
                 
-                // 阻止默认行为和冒泡，防止触发浏览器的滚屏模式
+                // Prevent default behavior and bubbling to avoid triggering the browser's autoscroll mode
                 if (evt.preventDefault) evt.preventDefault();
                 if (evt.stopPropagation) evt.stopPropagation();
             }
@@ -1183,7 +1183,7 @@ class OpenPosePanel {
                 var e = opt.e;
                 var vpt = canvas.viewportTransform;
                 
-                // 计算移动增量 (考虑 CSS 缩放)
+                // Compute the movement delta (accounting for CSS scaling)
                 const rect = canvas.getElement().getBoundingClientRect();
                 let scaleX = 1;
                 let scaleY = 1;
@@ -1214,19 +1214,19 @@ class OpenPosePanel {
             }
         });
         
-        // 禁用右键菜单，方便使用右键拖拽
+        // Disable the context menu to make right-button dragging easier
         const upperCanvasEl = canvas.upperCanvasEl;
         upperCanvasEl.addEventListener('contextmenu', function(e) {
             e.preventDefault();
         });
-        // 关键：强制阻止中键按下时的默认行为，并手动接管拖拽状态
-        // 因为 Fabric.js 在某些配置下可能不触发中键的 mouse:down 事件
+        // Key: forcibly prevent the default behavior on middle-button press and take over the drag state manually
+        // Because Fabric.js may not fire the middle-button mouse:down event under some configurations
         upperCanvasEl.addEventListener('mousedown', function(e) {
-            if (e.button === 1) { // 中键
+            if (e.button === 1) { // middle button
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // 手动触发拖拽状态
+                // Manually trigger the drag state
                 isDragging = true;
                 wasSelectionEnabled = canvas.selection;
                 canvas.selection = false;
@@ -1239,7 +1239,7 @@ class OpenPosePanel {
             }
         });
         
-        // 补充：确保中键释放时能结束拖拽（绑定到 window 以防鼠标移出画布）
+        // Addition: make sure releasing the middle button ends the drag (bound to window in case the mouse leaves the canvas)
         window.addEventListener('mouseup', function(e) {
             if (isDragging && e.button === 1) {
                 canvas.setViewportTransform(canvas.viewportTransform);
@@ -1252,16 +1252,16 @@ class OpenPosePanel {
 
         const updateLines = (target) => {
             if (!target || target.type !== 'circle') return;
-            // 查找所有关联的多边形连线
+            // Find all associated polygon connecting lines
             canvas.getObjects('polygon').forEach(polygon => {
                 if (polygon._startCircle === target || polygon._endCircle === target) {
                     const start = polygon._startCircle.getCenterPoint();
                     const end = polygon._endCircle.getCenterPoint();
-                    // 使用 OpenPosePanel 实例的方法计算新顶点
-                    // 注意：这里的 'this' 指向 OpenPosePanel 实例
+                    // Use the OpenPosePanel instance method to compute the new vertices
+                    // Note: 'this' here refers to the OpenPosePanel instance
                     const newPoints = this.getFusiformPoints(start, end);
                     polygon.set({ points: newPoints });
-                    // Polygon 更新 points 后通常不需要 setCoords，但为了保险
+                    // Polygon usually does not need setCoords after updating points, but just in case
                     polygon.setCoords();
                 }
             });
@@ -1332,14 +1332,14 @@ class OpenPosePanel {
     async captureCanvasClean() {
         this.lockMode = true;
 
-        // 保存当前视口状态
+        // Save the current viewport state
         const originalViewportTransform = this.canvas.viewportTransform;
-        // 重置视口以获取完整未缩放的图像
+        // Reset the viewport to get the full unscaled image
         this.canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
 
         const backgroundImage = this.canvas.backgroundImage;
         
-        // 保存图片对象的原始不透明度
+        // Save the original opacity of the image object
         const imageOpacities = new Map();
 
         try {
@@ -1372,11 +1372,11 @@ class OpenPosePanel {
                 if (imageOpacities.has(img)) {
                     img.opacity = imageOpacities.get(img);
                 } else {
-                    img.opacity = 1; // 默认恢复
+                    img.opacity = 1; // restore the default
                 }
             });
             
-            // 恢复视口状态
+            // Restore the viewport state
             this.canvas.viewportTransform = originalViewportTransform;
             this.canvas.renderAll();
 
@@ -1387,9 +1387,9 @@ class OpenPosePanel {
     async captureCanvasCombined() {
         this.lockMode = true;
 
-        // 保存当前视口状态
+        // Save the current viewport state
         const originalViewportTransform = this.canvas.viewportTransform;
-        // 重置视口以获取完整未缩放的图像
+        // Reset the viewport to get the full unscaled image
         this.canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
 
         const backgroundImage = this.canvas.backgroundImage;
@@ -1417,7 +1417,7 @@ class OpenPosePanel {
                 backgroundImage.opacity = originalOpacity;
             }
             
-            // 恢复视口状态
+            // Restore the viewport state
             this.canvas.viewportTransform = originalViewportTransform;
             this.canvas.renderAll();
 
@@ -1488,21 +1488,21 @@ class OpenPosePanel {
     }
 
     serializeJSON() {
-        // 关键修复：在序列化之前，先保存当前的视口变换（缩放和平移）
+        // Key fix: before serializing, save the current viewport transform (zoom and pan)
         const originalViewportTransform = this.canvas.viewportTransform;
         
-        // 临时将视口重置为默认状态 (无缩放，无偏移)
-        // 这样获取到的对象坐标就是原始的绝对坐标，不会受到缩放影响
+        // Temporarily reset the viewport to its default state (no zoom, no offset)
+        // so that the object coordinates we get are the original absolute coordinates, unaffected by zoom
         this.canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
 
-        // 重新计算所有对象的坐标以匹配重置后的视口
-        // 注意：calcTransformMatrix 或 setCoords 可能需要被调用，
-        // 但 fabric 在获取属性时通常会自动处理，除非我们直接操作了内部矩阵。
-        // 保险起见，我们遍历对象并调用 setCoords (虽然在 viewport 改变后可能不是必须的，但在某些版本是)
-        // 实际上，更简单的方法是直接获取对象的原始坐标，但 Fabric 的对象坐标是相对于 canvas 的。
-        // 当 viewportTransform 改变时，对象的渲染位置变了，但 left/top 属性值本身是基于 canvas 坐标系的。
-        // 如果我们之前是在缩放状态下修改了对象位置，Fabric 会自动将鼠标坐标转换回 Canvas 坐标。
-        // 所以理论上，只要重置了 viewport，导出的数据就是干净的。
+        // Recompute the coordinates of all objects to match the reset viewport
+        // Note: calcTransformMatrix or setCoords may need to be called,
+        // but fabric usually handles this automatically when getting properties, unless we manipulate the internal matrix directly.
+        // To be safe, we iterate over the objects and call setCoords (it may not be necessary after a viewport change, but in some versions it is)
+        // Actually, a simpler way is to get the original coordinates of the objects directly, but Fabric object coordinates are relative to the canvas.
+        // When viewportTransform changes, the rendered position of objects changes, but the left/top values themselves are based on the canvas coordinate system.
+        // If we modified an object's position while zoomed, Fabric automatically converts mouse coordinates back to canvas coordinates.
+        // So in theory, as long as the viewport is reset, the exported data is clean.
         
         const allCircles = this.canvas.getObjects('circle');
         const poses = {};
@@ -1522,7 +1522,7 @@ class OpenPosePanel {
 
             poseCircles.forEach(circle => {
                 const pointId = circle._id;
-                // 获取中心点 (此时视口已重置，坐标为原始 Canvas 坐标)
+                // Get the center point (the viewport is reset at this point, so coordinates are the original canvas coordinates)
                 const center = circle.getCenterPoint();
                 keypoints_2d[pointId * 3] = center.x;
                 keypoints_2d[pointId * 3 + 1] = center.y;
@@ -1540,7 +1540,7 @@ class OpenPosePanel {
             "people": people
         }, null, 4);
 
-        // 恢复原始的视口变换
+        // Restore the original viewport transform
         this.canvas.viewportTransform = originalViewportTransform;
 
         return json;
@@ -1677,32 +1677,32 @@ app.registerExtension({
     setup() {
         api.addEventListener("openpose_node_pause", (event) => {
             const nodeId = event.detail.node_id;
-            const currentPose = event.detail.current_pose; // 获取后端传来的最新姿态数据
-            const currentBackgroundImage = event.detail.current_background_image; // 获取最新背景图
+            const currentPose = event.detail.current_pose; // Get the latest pose data sent by the backend
+            const currentBackgroundImage = event.detail.current_background_image; // Get the latest background image
 
             const node = app.graph.getNodeById(nodeId);
             if (!node) return;
 
             
-            // 标记节点处于暂停状态
+            // Mark the node as paused
             node.is_paused = true;
 
-            // 0. 关键修复：如果后端传来了最新的姿态数据，强制更新节点属性和编辑器
+            // 0. Key fix: if the backend sent the latest pose data, force-update the node property and the editor
             if (currentPose && currentPose.trim() !== "") {
                 node.setProperty("poses_datas", currentPose);
                 
-                // 如果编辑器实例存在，直接加载新数据
+                // If the editor instance exists, load the new data directly
                 if (node.openPosePanel) {
                     node.openPosePanel.loadJSON(currentPose);
                 }
             }
             
-            // 0.5 关键修复：如果后端传来了最新的背景图，强制更新
+            // 0.5 Key fix: if the backend sent the latest background image, force-update it
             if (currentBackgroundImage && currentBackgroundImage.trim() !== "") {
                 node.setProperty("backgroundImage", currentBackgroundImage);
                 
                 if (node.openPosePanel) {
-                    // 强制刷新背景图
+                    // Force-refresh the background image
                     const imageUrl = `/view?filename=${currentBackgroundImage}&type=input&t=${Date.now()}`;
                     fabric.Image.fromURL(imageUrl, (img) => {
                         if (!img || !img.width) return;
@@ -1718,17 +1718,17 @@ app.registerExtension({
                 }
             }
 
-            // 1. 确保编辑器已打开
+            // 1. Make sure the editor is open
             if (node.openWidget && node.openWidget.callback) {
-                // 如果面板未打开，调用callback打开它
+                // If the panel is not open, call the callback to open it
                 if (!node.openPosePanel || !node.openPosePanel.panel || !document.body.contains(node.openPosePanel.panel)) {
                     node.openWidget.callback();
                 }
             }
 
-            // 2. 在面板底部添加控制按钮
+            // 2. Add control buttons at the bottom of the panel
             if (node.openPosePanel && node.openPosePanel.panel) {
-                // 调用封装好的方法
+                // Call the encapsulated method
                 node.openPosePanel.showPauseControls();
             }
         });
@@ -1748,19 +1748,19 @@ app.registerExtension({
             let startX, startY;
             let initialLeft, initialTop;
 
-            // 尝试查找标题栏，如果没有则使用整个面板但限制点击区域
-            // ComfyUI/LiteGraph 面板通常没有标准的 header class，但内容在顶部
-            // 我们通过监听 mousedown 并判断点击位置来实现
+            // Try to find the title bar; if there is none, use the whole panel but restrict the clickable area
+            // ComfyUI/LiteGraph panels usually have no standard header class, but the content is at the top
+            // We implement this by listening to mousedown and checking the click position
             
             panelElement.addEventListener("mousedown", (e) => {
                 const rect = panelElement.getBoundingClientRect();
 
-                // 1. 排除右下角缩放手柄区域 (例如 30x30 像素)
+                // 1. Exclude the bottom-right resize handle area (e.g. 30x30 pixels)
                 if (e.clientX > rect.right - 30 && e.clientY > rect.bottom - 30) {
                     return; 
                 }
 
-                // 2. 排除交互元素 (Input, Button, Canvas 等)
+                // 2. Exclude interactive elements (Input, Button, Canvas, etc.)
                 const target = e.target;
                 const tagName = target.tagName.toUpperCase();
                 
@@ -1772,29 +1772,29 @@ app.registerExtension({
                     return;
                 }
                 
-                // 排除 Fabric 的容器 (避免误触 Canvas 边缘)
+                // Exclude the Fabric container (to avoid accidentally touching the Canvas edge)
                 if (target.classList.contains('canvas-container')) {
                     return;
                 }
 
-                // 3. 允许拖动 (只要不是上述元素，点击面板任何空白处都可以拖动)
+                // 3. Allow dragging (as long as it is not one of the above, clicking any blank area of the panel can drag)
                 isDragging = true;
                 startX = e.clientX;
                 startY = e.clientY;
 
-                // 关键：在开始拖动时，将 transform 转换为绝对的 left/top 坐标
-                // 这样可以避免 transform: translate(-50%, -50%) 带来的计算复杂性
+                // Key: when dragging starts, convert the transform to absolute left/top coordinates
+                // This avoids the computational complexity of transform: translate(-50%, -50%)
                 const computedStyle = window.getComputedStyle(panelElement);
                 const currentLeft = rect.left;
                 const currentTop = rect.top;
 
-                // 拖动时保持 fixed 定位，移除 transform，直接使用 left/top
+                // Keep fixed positioning while dragging, remove the transform, and use left/top directly
                 panelElement.style.transform = "none";
                 panelElement.style.position = "fixed";
                 panelElement.style.left = currentLeft + "px";
                 panelElement.style.top = currentTop + "px";
                 panelElement.style.margin = "0";
-                // 确保拖拽时层级依然最高
+                // Make sure the stacking level is still highest while dragging
                 panelElement.style.zIndex = "2147483647"; 
                 
                 initialLeft = currentLeft;
@@ -1852,23 +1852,23 @@ app.registerExtension({
                 this.jsonWidget.inputEl.style.display = "none";
             } else {
             }
-			// ========== 关键修改：添加"应用姿态"按钮（从poses_datas加载） ==========
-            this.applyPoseWidget = this.addWidget("button", "应用姿态", "image", async () => {
+			// ========== Key change: add the "Apply Pose" button (loads from poses_datas) ==========
+            this.applyPoseWidget = this.addWidget("button", "Apply Pose", "image", async () => {
                 try {
-                    // 检查编辑器是否已打开
+                    // Check whether the editor is open
                     if (this.openPosePanel) {
-                        // 如果编辑器已打开，直接调用加载pose数据的方法
+                        // If the editor is open, call the pose-loading method directly
                         await this.openPosePanel.loadFromPoseKeypoint();
                     } else {
-                        // 如果编辑器未打开，直接从poses_datas属性读取数据
+                        // If the editor is not open, read the data directly from the poses_datas property
                         let poseData = this.properties?.poses_datas;
                         
                         if (!poseData || poseData.trim() === "") {
-                            alert("未检测到有效的poses_datas数据，请先确保该属性有值！");
+                            alert("No valid poses_datas found. Please make sure this property has a value!");
                             return;
                         }
 
-                        // 数据格式标准化
+                        // Normalize the data format
                         let poseJson = null;
                         if (typeof poseData === "string") {
                             poseJson = JSON.parse(poseData);
@@ -1877,11 +1877,11 @@ app.registerExtension({
                         }
 
                         if (!poseJson) {
-                            alert("poses_datas数据格式错误！");
+                            alert("Invalid poses_datas format!");
                             return;
                         }
 
-                        // 提取宽高信息
+                        // Extract width and height info
                         let canvasWidth = 512;
                         let canvasHeight = 512;
                         if (Array.isArray(poseJson) && poseJson[0]) {
@@ -1892,11 +1892,11 @@ app.registerExtension({
                             canvasHeight = poseJson.height;
                         }
 
-                        // 更新节点的宽高属性
+                        // Update the node's width and height properties
                         this.setProperty("output_width_for_dwpose", canvasWidth);
                         this.setProperty("output_height_for_dwpose", canvasHeight);
                         
-                        // 更新对应的输入框
+                        // Update the corresponding input boxes
                         const widthWidget = this.widgets?.find(w => w.name === "output_width_for_dwpose");
                         if (widthWidget) {
                             widthWidget.value = canvasWidth;
@@ -1911,7 +1911,7 @@ app.registerExtension({
                             if (heightWidget.inputEl) heightWidget.inputEl.value = canvasHeight;
                         }
 
-                        // 提取people数据并保存到节点（确保数据格式正确）
+                        // Extract the people data and save it to the node (make sure the data format is correct)
                         let people = [];
                         if (Array.isArray(poseJson) && poseJson[0]?.people) {
                             people = poseJson[0].people;
@@ -1920,7 +1920,7 @@ app.registerExtension({
                         }
 
                         if (people.length > 0) {
-                            // 序列化pose数据并保存到节点
+                            // Serialize the pose data and save it to the node
                             const poseJsonData = JSON.stringify({
                                 "width": canvasWidth,
                                 "height": canvasHeight,
@@ -1932,39 +1932,39 @@ app.registerExtension({
                                 this.jsonWidget.value = poseJsonData;
                             }
                             
-                            // 触发节点刷新
+                            // Trigger a node refresh
                             this.setDirtyCanvas(true, true);
                             if (app.graph) app.graph.setDirtyCanvas(true, true);
                             if (app.canvas) app.canvas.draw(true);
                             
                         } else {
-                            alert("poses_datas中未找到有效的人体关键点信息！");
+                            alert("No valid body keypoint information found in poses_datas!");
                         }
                     }
                 } catch (error) {
-                    alert(`应用姿态失败：${error.message}`);
+                    alert(`Failed to apply pose: ${error.message}`);
                 }
             });
             this.applyPoseWidget.serialize = false;
 			
-            this.openWidget = this.addWidget("button", "姿态编辑", "image", () => {
+            this.openWidget = this.addWidget("button", "Edit Pose", "image", () => {
                 const graphCanvas = LiteGraph.LGraphCanvas.active_canvas
                 if (graphCanvas == null)
                     return;
 
-                // 【修改】移除pose_keypoint输入检查，改为检查poses_datas属性
+                // [Change] Removed the pose_keypoint input check; now checks the poses_datas property instead
                 if (this.properties.poses_datas && this.properties.poses_datas.trim() !== "") {
                 } else {
                 }
 
-                const panel = graphCanvas.createPanel("姿态编辑器", { closable: true });
+                const panel = graphCanvas.createPanel("Pose Editor", { closable: true });
                 panel.node = this;
                 panel.classList.add("openpose-editor");
                 
-                // 设置更大的默认尺寸
+                // Set a larger default size
                 panel.style.width = "900px";
                 panel.style.height = "800px";
-                // 终极修复：使用独立的遮罩层容器
+                // Ultimate fix: use a separate overlay container
                 let mask = document.getElementById("openpose-mask-container");
                 if (!mask) {
                     mask = document.createElement("div");
@@ -1973,22 +1973,22 @@ app.registerExtension({
                     document.body.appendChild(mask);
                 }
 
-                // 强制将 panel 移入遮罩层，并设置最高优先级样式
+                // Force-move the panel into the overlay and set the highest-priority styles
                 mask.appendChild(panel);
                 
-                // 确保 panel 自身样式正确，并启用交互
+                // Make sure the panel's own styles are correct and enable interaction
                 panel.style.position = "fixed";
                 panel.style.top = "50%";
                 panel.style.left = "50%";
                 panel.style.transform = "translate(-50%, -50%)";
                 panel.style.zIndex = "2147483647"; 
                 panel.style.pointerEvents = "auto";
-                panel.style.boxShadow = "0 0 50px rgba(0,0,0,0.5)"; // 添加阴影增加可视性
+                panel.style.boxShadow = "0 0 50px rgba(0,0,0,0.5)"; // add a shadow to improve visibility
 
                 this.openPosePanel = new OpenPosePanel(panel, this);
                 makePanelDraggable(panel, this.openPosePanel);
                 
-                // 确保 resize handle 也跟过去
+                // Make sure the resize handle follows too
                 const resizer = document.createElement("div");
                 resizer.style.width = "10px";
                 resizer.style.height = "10px";
@@ -1999,20 +1999,20 @@ app.registerExtension({
                 resizer.style.cursor = "se-resize";
                 panel.appendChild(resizer);
 
-                // 添加保活机制：防止 LiteGraph 或其他脚本将 panel 移走
-                // 每 500ms 检查一次，如果 panel 不在 mask 中，则移回
+                // Add a keep-alive mechanism: prevent LiteGraph or other scripts from moving the panel away
+                // Check every 500ms; if the panel is not in the mask, move it back
                 const keepAliveInterval = setInterval(() => {
                     if (panel && mask && panel.parentElement !== mask) {
                          mask.appendChild(panel);
                     }
-                    // 如果 panel 被关闭（通常是从 DOM 移除），清除定时器
-                    // 注意：LiteGraph 的 close 可能会移除元素，我们需要检测
+                    // If the panel is closed (usually removed from the DOM), clear the timer
+                    // Note: LiteGraph's close may remove the element, so we need to detect it
                     if (!document.body.contains(mask)) {
                         clearInterval(keepAliveInterval);
                     }
                 }, 500);
                 
-                // 劫持 panel.close 以清理 mask 和定时器
+                // Hijack panel.close to clean up the mask and the timer
                 const originalClose = panel.close;
                 panel.close = function() {
                     clearInterval(keepAliveInterval);

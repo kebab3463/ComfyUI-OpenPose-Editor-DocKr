@@ -13,7 +13,7 @@ from server import PromptServer
 from aiohttp import web
 
 # ====================================================================================================
-# API 路由处理：暂停与恢复
+# API route handlers: pause and resume
 # ====================================================================================================
 PAUSED_NODES = {}
 
@@ -31,7 +31,7 @@ any_type = AnyType("*")
 async def openpose_update_pose(request):
     try:
         json_data = await request.json()
-        node_id = str(json_data.get('node_id')) # 强制转字符串
+        node_id = str(json_data.get('node_id')) # force to string
         pose_data = json_data.get('pose_data')
         
         if node_id in PAUSED_NODES:
@@ -49,7 +49,7 @@ async def openpose_update_pose(request):
 async def openpose_cancel(request):
     try:
         json_data = await request.json()
-        node_id = str(json_data.get('node_id')) # 强制转字符串
+        node_id = str(json_data.get('node_id')) # force to string
         
         if node_id in PAUSED_NODES:
             PAUSED_NODES[node_id] = {
@@ -62,14 +62,14 @@ async def openpose_cancel(request):
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 # ====================================================================================================
-# 常量定义
+# Constants
 # ====================================================================================================
 LIMB_SEQ = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], [10, 11], [2, 12], [12, 13], [13, 14], [2, 1], [1, 15], [15, 17], [1, 16], [16, 18]]
 
 COLORS = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
 
 
-# 【最终整合版】OpenPose Editor 节点
+# [Final integrated version] OpenPose Editor node
 # ====================================================================================================
 class OpenPoseEditor:
     _last_fingerprints = {}
@@ -84,7 +84,7 @@ class OpenPoseEditor:
                 "pose_image": ("IMAGE",),
                 "pose_point": ("POSE_KEYPOINT",),
                 "prev_image": ("IMAGE",),
-                "bridge_anything": (any_type,),  # 改为IMAGE类型
+                "bridge_anything": (any_type,),  # changed to IMAGE type
                 "output_width_for_dwpose": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 64}),
                 "output_height_for_dwpose": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 64}),
                 "scale_for_xinsr_for_dwpose": ("BOOLEAN", {"default": True}),
@@ -97,16 +97,16 @@ class OpenPoseEditor:
             }
         }
     
-    # 【终极修复】IS_CHANGED：完全兼容所有参数，包含IMAGE类型的bridge_anything
+    # [Ultimate fix] IS_CHANGED: fully compatible with all parameters, including the IMAGE-type bridge_anything
     @classmethod
     def IS_CHANGED(cls, *args, **kwargs):
         """
-        兼容任意参数传入：
-        - *args 接收位置参数
-        - **kwargs 接收所有关键字参数
-        彻底避免 "unexpected keyword argument" 警告
+        Accepts arbitrary parameters:
+        - *args receives positional arguments
+        - **kwargs receives all keyword arguments
+        Completely avoids the "unexpected keyword argument" warning
         """
-        # 1. 提取核心参数（兼容任意传入方式）
+        # 1. Extract core parameters (compatible with any way of passing them)
         image = kwargs.get("image", args[0] if args else "")
         output_width_for_dwpose = kwargs.get("output_width_for_dwpose", 512)
         output_height_for_dwpose = kwargs.get("output_height_for_dwpose", 512)
@@ -116,12 +116,12 @@ class OpenPoseEditor:
         backgroundImage = kwargs.get("backgroundImage", "")
         poses_datas = kwargs.get("poses_datas", "")
         
-        # 处理IMAGE类型参数的哈希（用内存地址+形状）
+        # Hash IMAGE-type parameters (using memory address + shape)
         def get_image_hash(img_tensor):
             if img_tensor is None:
                 return 0
             try:
-                # 组合内存地址+张量形状，确保唯一性
+                # Combine memory address + tensor shape to ensure uniqueness
                 return hash(f"{id(img_tensor)}_{str(img_tensor.shape)}")
             except:
                 return hash(id(img_tensor))
@@ -131,7 +131,7 @@ class OpenPoseEditor:
         pose_image_hash = get_image_hash(kwargs.get("pose_image"))
         pose_hash = hash(str(kwargs.get("pose_point"))) if kwargs.get("pose_point") else 0
 
-        # 2. 生成唯一指纹（强制节点每次执行，包含所有参数）
+        # 2. Generate a unique fingerprint (force the node to run every time, includes all parameters)
         timestamp = str(time.time() * 1000)
         random_str = str(random.randint(0, 999999))
         
@@ -144,13 +144,13 @@ class OpenPoseEditor:
         cls._last_fingerprints[fingerprint] = True
         return fingerprint
 
-    # 输出定义
+    # Output definitions
     RETURN_TYPES = ("IMAGE", "IMAGE","INT","INT",)
     RETURN_NAMES = ("dw_pose_image", "dw_comb_image","dw_pose_image_width","dw_pose_image_height")
     FUNCTION = "get_images"
     CATEGORY = "image"
     
-    # POSE_KEYPOINT转JSON
+    # Convert POSE_KEYPOINT to JSON
     def pose_point_to_json(self, pose_point, image_tensor):
         if not pose_point or not isinstance(pose_point, list):
             return ""
@@ -190,7 +190,7 @@ class OpenPoseEditor:
         }
         return json.dumps(data_to_save, indent=4)
     
-    # 渲染DWPose
+    # Render DWPose
     def render_dw_pose(self, pose_json, width, height, scale_for_xinsr):
         if not pose_json or not pose_json.strip():
             return np.zeros((height, width, 3), dtype=np.uint8)
@@ -244,22 +244,22 @@ class OpenPoseEditor:
         
         return cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
 
-    # 主函数：处理bridge_anything（IMAGE类型）
+    # Main function: handles bridge_anything (IMAGE type)
     def get_images(self, image, output_width_for_dwpose, output_height_for_dwpose, scale_for_xinsr_for_dwpose, 
                     backgroundImage, poses_datas, bridge_anything=None, prev_image=None, pose_image=None, pose_point=None, 
                     stop_for_edit=False, unique_id=None):
         
-        # 安全性检查：确保核心字符串参数不为 None
+        # Safety check: make sure the core string parameters are not None
         if backgroundImage is None:
             backgroundImage = ""
         if poses_datas is None:
             poses_datas = ""
 
-        # 清理缓存
+        # Clear cache
         if hasattr(folder_paths, 'cache') and isinstance(folder_paths.cache, dict):
             folder_paths.cache.clear()
         
-        # 处理bridge_anything（新增：保存为临时文件）
+        # Handle bridge_anything (new: save as a temporary file)
         if bridge_anything is not None and bridge_anything.shape[0] > 0:
             try:
                 bridge_np = (bridge_anything[0].cpu().numpy() * 255).astype(np.uint8)
@@ -268,12 +268,12 @@ class OpenPoseEditor:
                 bridge_filename = f"openpose_bridge_temp_{int(time.time() * 1000)}.png"
                 bridge_filepath = os.path.join(temp_dir, bridge_filename)
                 bridge_pil.save(bridge_filepath)
-                # 可选择将bridge作为背景图使用
+                # Optionally use the bridge as the background image
                 # backgroundImage = bridge_filename
             except Exception as e:
                 pass
         
-        # 1. 转换pose_point为JSON
+        # 1. Convert pose_point to JSON
         converted_pose_json = ""
         if pose_point is not None and pose_image is not None:
             converted_pose_json = self.pose_point_to_json(pose_point, pose_image)
@@ -285,7 +285,7 @@ class OpenPoseEditor:
                 except json.JSONDecodeError:
                     pass
 	
-        # 2. 保存pose_image为临时文件
+        # 2. Save pose_image as a temporary file
         if pose_image is not None and pose_image.shape[0] > 0:
             try:
                 pose_image_np = (pose_image[0].cpu().numpy() * 255).astype(np.uint8)
@@ -299,7 +299,7 @@ class OpenPoseEditor:
         else:
             pass
             
-        # 3. 保存prev_image为临时文件
+        # 3. Save prev_image as a temporary file
         ld_filepath= None
         if prev_image is not None and prev_image.shape[0] > 0:
             try:
@@ -315,68 +315,68 @@ class OpenPoseEditor:
         else:
             pass
         
-        # 4. 更新poses_datas (关键修复：确保从输入连接获取的姿态数据被使用)
+        # 4. Update poses_datas (key fix: make sure pose data obtained from the input connection is used)
         if converted_pose_json:
             poses_datas = converted_pose_json
 
         # ============================================================
-        # 暂停/断点逻辑 (Stop for Edit)
+        # Pause/breakpoint logic (Stop for Edit)
         # ============================================================
         if stop_for_edit and unique_id:
-            node_str_id = str(unique_id) # 强制转字符串
+            node_str_id = str(unique_id) # force to string
             
-            # 初始化暂停状态
-            # 关键修复：将当前的 poses_datas (可能刚从输入连接更新) 放入状态中
-            # 这样前端如果查询状态，或者后端需要知道当前数据
+            # Initialize the pause state
+            # Key fix: put the current poses_datas (possibly just updated from the input connection) into the state
+            # so that if the frontend queries the state, or the backend needs to know the current data, it is available
             PAUSED_NODES[node_str_id] = {'status': 'waiting', 'initial_data': poses_datas}
             
-            # 发送暂停消息给前端
-            # 关键修复：把最新的 pose 数据也发给前端，让前端有机会刷新编辑器
-            # 同时发送最新的背景图片路径
+            # Send the pause message to the frontend
+            # Key fix: also send the latest pose data to the frontend so it can refresh the editor
+            # and send the latest background image path as well
             PromptServer.instance.send_sync("openpose_node_pause", {
                 "node_id": node_str_id, 
-                "current_pose": poses_datas,  # 携带最新的姿态数据
-                "current_background_image": backgroundImage # 携带最新的背景图片路径
+                "current_pose": poses_datas,  # carries the latest pose data
+                "current_background_image": backgroundImage # carries the latest background image path
             })
             
-            # 阻塞循环
+            # Blocking loop
             while True:
                 if node_str_id not in PAUSED_NODES:
-                    # 异常情况，状态丢失
+                    # Abnormal case: state lost
                     break
                     
                 state = PAUSED_NODES[node_str_id]
                 status = state.get('status')
                 
                 if status == 'resume':
-                    # 获取前端传回的新数据
+                    # Get the new data returned by the frontend
                     new_pose_data = state.get('data')
                     if new_pose_data:
                         poses_datas = new_pose_data
-                        # 尝试更新尺寸
+                        # Try to update the size
                         try:
                             pd = json.loads(new_pose_data)
                             output_width_for_dwpose = pd.get("width", output_width_for_dwpose)
                             output_height_for_dwpose = pd.get("height", output_height_for_dwpose)
                         except:
                             pass
-                    # 清理状态
+                    # Clean up the state
                     del PAUSED_NODES[node_str_id]
                     break
                 
                 elif status == 'cancel':
                     del PAUSED_NODES[node_str_id]
-                    # 使用 ComfyUI 推荐的方式中断执行
+                    # Interrupt execution the way ComfyUI recommends
                     interrupt_processing()
-                    return (torch.zeros(1, 512, 512, 3), {}, torch.zeros(1, 512, 512, 3)) # 返回空数据防止立即报错
+                    return (torch.zeros(1, 512, 512, 3), {}, torch.zeros(1, 512, 512, 3)) # return empty data to prevent an immediate error
                 
                 time.sleep(0.1)
             
-        # --- 输出1: 纯DWPose渲染图 ---
+        # --- Output 1: pure DWPose render ---
         dw_pose_np = self.render_dw_pose(poses_datas, output_width_for_dwpose, output_height_for_dwpose, scale_for_xinsr_for_dwpose)
         dw_pose_image = torch.from_numpy(dw_pose_np.astype(np.float32) / 255.0).unsqueeze(0).clone()
         
-        # 保存DWPose渲染图
+        # Save the DWPose render
         dw_bg_filename = ""
         try:
             dw_pose_image_pil = Image.fromarray(dw_pose_np)
@@ -387,7 +387,7 @@ class OpenPoseEditor:
         except Exception as e:
             pass
 
-        # --- 输出2: DWPose+背景合成图 ---
+        # --- Output 2: DWPose + background composite ---
         dw_combined_image = dw_pose_image.clone()
         if backgroundImage and backgroundImage.strip() != "":
             bg_image_path = folder_paths.get_annotated_filepath(backgroundImage)
@@ -405,7 +405,7 @@ class OpenPoseEditor:
                 except Exception as e:
                     pass
         
-        # 构建UI数据
+        # Build the UI data
         timestamp = str(time.time() * 1000)
         random_str = str(random.randint(0, 999999))
         ui_data = {
@@ -420,25 +420,25 @@ class OpenPoseEditor:
             "dw_pose_height": [output_height_for_dwpose]
         }
         
-        # 返回结果
+        # Return the result
         return {
             "ui": ui_data,
             "result": (dw_pose_image, dw_combined_image, output_width_for_dwpose, output_height_for_dwpose)
         }
 
 # ====================================================================================================
-# SavePoseToJson 节点
+# SavePoseToJson node
 # ====================================================================================================
 class SavePoseToJson:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "pose_point": ("POSE_KEYPOINT",),      # 姿态关键点数据（包含canvas尺寸）
-                "filename_prefix": ("STRING", {"default": "poses/pose"})  # 保存文件名前缀
+                "pose_point": ("POSE_KEYPOINT",),      # pose keypoint data (includes canvas size)
+                "filename_prefix": ("STRING", {"default": "poses/pose"})  # filename prefix for saving
             },
             "optional": {
-                "pose_image": ("IMAGE",),  # 可选保存图片
+                "pose_image": ("IMAGE",),  # optionally save the image
             }
         }
 
@@ -449,38 +449,38 @@ class SavePoseToJson:
     CATEGORY = "image"
 
     def save_json(self, pose_point, filename_prefix="pose", pose_image=None):
-        # ========== 核心修改：从pose_point获取canvas尺寸 ==========
-        image_width = 512  # 默认值
-        image_height = 512 # 默认值
+        # ========== Core change: get the canvas size from pose_point ==========
+        image_width = 512  # default value
+        image_height = 512 # default value
         
-        # 解析pose_point获取canvas尺寸
+        # Parse pose_point to get the canvas size
         if pose_point and isinstance(pose_point, list) and len(pose_point) > 0:
-            # 取第一个元素（对应你的JSON数组中的第一个对象）
+            # Take the first element (corresponds to the first object in your JSON array)
             first_pose_data = pose_point[0]
             if isinstance(first_pose_data, dict):
-                # 从pose数据中读取canvas尺寸
+                # Read the canvas size from the pose data
                 image_width = first_pose_data.get("canvas_width", 512)
                 image_height = first_pose_data.get("canvas_height", 512)
 
-        # ========== 处理姿态关键点数据 ==========
+        # ========== Process pose keypoint data ==========
         processed_people = []
         if pose_point and isinstance(pose_point, list) and len(pose_point) > 0:
             for result_dict in pose_point:
-                # 安全获取 people 列表
+                # Safely get the people list
                 people_in_dict = result_dict.get("people", []) if isinstance(result_dict, dict) else []
                 for person in people_in_dict:
                     if not isinstance(person, dict):
                         continue
                         
-                    # 获取原始关键点并初始化输出数组
+                    # Get the raw keypoints and initialize the output array
                     original_keypoints = person.get("pose_keypoints_2d", [])
-                    body_keypoints = [0.0] * 54  # 18个关键点 × 3（x,y,confidence）
+                    body_keypoints = [0.0] * 54  # 18 keypoints x 3 (x, y, confidence)
                     
-                    # 复制并转换关键点（相对坐标 → 绝对坐标）
+                    # Copy and convert keypoints (relative coordinates -> absolute coordinates)
                     num_points_to_copy = min(18, len(original_keypoints) // 3)
                     for i in range(num_points_to_copy):
                         base_idx = i * 3
-                        # 安全取值（避免索引越界）
+                        # Safe value access (avoid index out of range)
                         if base_idx + 2 >= len(original_keypoints):
                             continue
                             
@@ -489,7 +489,7 @@ class SavePoseToJson:
                         confidence = original_keypoints[base_idx + 2]
                         
                         if confidence > 0 and image_width > 0 and image_height > 0:
-                            # 相对坐标（0-1）转换为绝对像素坐标
+                            # Convert relative coordinates (0-1) to absolute pixel coordinates
                             absolute_x = x * image_width
                             absolute_y = y * image_height
                             body_keypoints[base_idx] = absolute_x
@@ -500,26 +500,26 @@ class SavePoseToJson:
                         "pose_keypoints_2d": body_keypoints
                     })
 
-        # ========== 保存 JSON 文件 ==========
-        # 构建要保存的数据（保留canvas尺寸信息）
+        # ========== Save JSON file ==========
+        # Build the data to save (keep the canvas size info)
         data_to_save = {
             "width": int(image_width),
             "height": int(image_height),
-            "canvas_width": int(image_width),   # 兼容保留原字段
-            "canvas_height": int(image_height), # 兼容保留原字段
+            "canvas_width": int(image_width),   # kept for compatibility with the original field
+            "canvas_height": int(image_height), # kept for compatibility with the original field
             "people": processed_people
         }
 
-        # 生成保存路径和文件名
+        # Generate the save path and file name
         output_dir = folder_paths.get_output_directory()
         full_output_folder, filename, _, subfolder, _ = folder_paths.get_save_image_path(
             filename_prefix, output_dir, image_width, image_height
         )
         
-        # 确保保存文件夹存在
+        # Make sure the save folder exists
         os.makedirs(full_output_folder, exist_ok=True)
         
-        # 处理文件计数器（避免重复）
+        # Handle the file counter (avoid duplicates)
         counter = 1
         try:
             existing_files = [f for f in os.listdir(full_output_folder) 
@@ -528,7 +528,7 @@ class SavePoseToJson:
                 max_counter = 0
                 for f in existing_files:
                     try:
-                        num_str = f[len(filename)+1:-5]  # 提取数字部分
+                        num_str = f[len(filename)+1:-5]  # extract the number part
                         num = int(num_str)
                         if num > max_counter:
                             max_counter = num
@@ -538,7 +538,7 @@ class SavePoseToJson:
         except FileNotFoundError:
             pass
 
-        # 保存文件（UTF-8编码，兼容中文）
+        # Save the file (UTF-8 encoding, compatible with Chinese)
         final_filename = f"{filename}_{counter:05d}.json"
         file_path = os.path.join(full_output_folder, final_filename)
 
@@ -547,10 +547,10 @@ class SavePoseToJson:
 
         result_filename = os.path.join(subfolder, final_filename) if subfolder else final_filename
 
-        # ========== 保存图片文件 (新增功能) ==========
+        # ========== Save image file (new feature) ==========
         if pose_image is not None:
             try:
-                # 处理 batch 中的第一张图片
+                # Process the first image in the batch
                 img_tensor = pose_image[0]
                 i = 255. * img_tensor.cpu().numpy()
                 img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
@@ -566,7 +566,7 @@ class SavePoseToJson:
 
 
 # ====================================================================================================
-# 节点注册 + 修复TextConcatenator警告的全局方案
+# Node registration + global fix for the TextConcatenator warning
 # ====================================================================================================
 NODE_CLASS_MAPPINGS = {
     "Nui.OpenPoseEditor": OpenPoseEditor,
@@ -578,10 +578,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SavePoseToJson": "Save Pose to JSON (from Keypoint)"
 }
 
-# 【关键】全局修复TextConcatenator的IS_CHANGED警告（一次性解决）
+# [Key] Global fix for the TextConcatenator IS_CHANGED warning (solved once and for all)
 try:
     from nodes import TextConcatenator
-    # 重写TextConcatenator的IS_CHANGED方法，兼容所有参数
+    # Override TextConcatenator's IS_CHANGED method to be compatible with all parameters
     original_tc_is_changed = TextConcatenator.IS_CHANGED
     @classmethod
     def fixed_tc_is_changed(cls, *args, **kwargs):

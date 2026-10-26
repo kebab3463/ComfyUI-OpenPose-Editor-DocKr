@@ -4,7 +4,7 @@ import os
 import importlib.util
 
 def check_and_install_dependencies():
-    # 获取当前文件所在目录
+    # Get the directory containing this file
     current_dir = os.path.dirname(os.path.abspath(__file__))
     requirements_path = os.path.join(current_dir, "requirements.txt")
     
@@ -16,10 +16,10 @@ def check_and_install_dependencies():
             requirements = [line.strip() for line in f if line.strip() and not line.startswith('#')]
         
         for req in requirements:
-            # 简单的包名提取 (例如 "numpy<2" -> "numpy")
+            # Simple package name extraction (e.g. "numpy<2" -> "numpy")
             pkg_name = req.split('==')[0].split('>=')[0].split('<=')[0].split('<')[0].split('>')[0].strip()
             
-            # 特殊处理 opencv
+            # Special handling for opencv
             if pkg_name == "opencv-python":
                 pkg_name = "cv2"
             elif pkg_name == "Pillow":
@@ -35,7 +35,7 @@ def check_and_install_dependencies():
     except Exception:
         pass
 
-# 执行依赖检查
+# Run the dependency check
 check_and_install_dependencies()
 
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS

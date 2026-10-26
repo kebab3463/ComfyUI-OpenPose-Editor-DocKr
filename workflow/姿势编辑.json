@@ -148,7 +148,7 @@
       "mode": 0,
       "inputs": [
         {
-          "label": "图像",
+          "label": "Image",
           "name": "image",
           "type": "IMAGE",
           "link": 5
@@ -156,7 +156,7 @@
       ],
       "outputs": [
         {
-          "label": "图像",
+          "label": "Image",
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
@@ -166,7 +166,7 @@
           ]
         },
         {
-          "label": "姿态关键点",
+          "label": "Pose Keypoints",
           "name": "POSE_KEYPOINT",
           "type": "POSE_KEYPOINT",
           "links": [
@@ -265,7 +265,7 @@
           "links": null
         }
       ],
-      "title": "01_R_UPIMG_上传照片",
+      "title": "01_R_UPIMG_Upload_Photo",
       "properties": {
         "Node name for S&R": "LoadImage",
         "cnr_id": "comfy-core",
@@ -559,7 +559,7 @@
   "groups": [
     {
       "id": 1,
-      "title": "节点应用",
+      "title": "Node Apply",
       "bounding": [
         1927.5918869085724,
         5667.721978216682,
@@ -572,7 +572,7 @@
     },
     {
       "id": 2,
-      "title": "手工应用",
+      "title": "Manual Apply",
       "bounding": [
         3732.4185274715996,
         5673.290022657993,
